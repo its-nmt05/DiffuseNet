@@ -2,9 +2,9 @@ Collection of generative models trained from scratch including DDPM, DiT, VAE fo
 
 ## DDPM Generations
 
-- MNIST generations
-![mnist_generation](./diffusion/outputs/mnist.png)
-- CIFAR-10 generations with perceptual loss
-![CIFAR-10_perceptual_generation](./diffusion/outputs/cifar_perceptual.png)
-- sampling timesteps
-  ![CIFAR-10_perceptual_generation](./diffusion/outputs/sampling.png)
+<div style="display: flex; gap: 1rem;">
+    <img src="./diffusion/outputs/mnist.png" alt="mnist_generation" width="48%">
+    <img src="./diffusion/outputs/cifar_perceptual.png" alt="CIFAR-10_perceptual_generation" width="48%">
+</div>
+
+![sampling_timesteps](./diffusion/outputs/sampling.png)
