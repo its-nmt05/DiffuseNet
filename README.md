@@ -7,4 +7,5 @@ Collection of generative models trained from scratch including DDPM, DiT, VAE fo
     <img src="./diffusion/outputs/cifar_perceptual.png" alt="CIFAR-10_perceptual_generation" width="48%">
 </div>
 
+### Timestep sampling (T=500)
 ![sampling_timesteps](./diffusion/outputs/sampling.png)
