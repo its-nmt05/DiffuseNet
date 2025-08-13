@@ -1,0 +1,139 @@
+import os
+import cv2
+import random
+import torch
+import torch.nn as nn
+import torchvision
+from torchvision.utils import make_grid
+
+
+def get_norm(norm_type='bn', norm_channels=32, num_groups=None):
+    if norm_type == 'bn':
+        return nn.BatchNorm2d(norm_channels) 
+    elif norm_type == 'gn':
+        if num_groups is None: 
+            raise ValueError("num_groups must be specified for GroupNorm")
+        return nn.GroupNorm(num_groups=num_groups, num_channels=norm_channels)
+    else:
+        raise ValueError(f"Unsupported normalization type: {norm_type}")
+    
+
+def get_activation(activation_type='relu'):
+    activation_type = activation_type.lower()
+    if activation_type == 'silu':
+        return nn.SiLU()
+    elif activation_type == 'gelu':
+        return nn.GELU()    
+    elif activation_type == 'elu':
+        return nn.ELU()
+    else: 
+        raise ValueError(f"Activation type '{activation_type}' not in list of supported activations: ['silu', 'gelu', 'elu']")
+
+
+# extract frames from video with specified parameters
+def extract_frames(input_video, output_dir, interval, resolution=None, start=0, end=None):
+    cap = cv2.VideoCapture(input_video)
+    if not cap.isOpened():
+        raise IOError(f"Cannot open video file {input_video}")
+
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    if fps <= 0:
+        fps = 30.0
+
+    if end and end < start:
+        raise ValueError("End time must be greater than start time")
+
+    interval_frames = int(round(interval * fps))
+    start_frame = int(round(start * fps))
+    end_frame = int(round(end * fps)) if end is not None else None
+    
+    frame_idx = 0
+    saved_idx = 0
+    os.makedirs(output_dir, exist_ok=True)
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        # skip until start_frame
+        if frame_idx < start_frame:
+            frame_idx += 1
+            continue
+
+        # stop after end_frame
+        if end_frame is not None and frame_idx > end_frame:
+            break
+
+        # save frames at the given interval
+        if (frame_idx - start_frame) % interval_frames == 0:
+            if resolution:
+                frame = cv2.resize(frame, (resolution, resolution),
+                                   interpolation=cv2.INTER_AREA)
+            filename = f"frame_{saved_idx:05d}.jpg"
+            path = os.path.join(output_dir, filename)
+            cv2.imwrite(path, frame)
+            saved_idx += 1
+
+        frame_idx += 1
+
+    cap.release()
+    print(f"Saved {saved_idx} frames to {output_dir}")
+
+
+# assign frames to train and test splits
+def assign_frames(frames_dir, test_ratio=0.2, seed=None, train_out="train_indices.txt", test_out="test_indices.txt"):
+    all_frames = sorted(
+        f for f in os.listdir(frames_dir)
+        if os.path.isfile(os.path.join(frames_dir, f))
+    )
+    total = len(all_frames)
+    if total == 0:
+        print("No frames found in", frames_dir)
+        return
+
+    # optionally seed 
+    if seed is not None:
+        random.seed(seed)
+        
+    indices = list(range(total))
+    random.shuffle(indices)
+    test_count = int(total * test_ratio)
+    test_indices = sorted(indices[:test_count])
+    train_indices = sorted(indices[test_count:])
+
+    with open(train_out, "w") as f:
+        for idx in train_indices:
+            f.write(f"{all_frames[idx]}\n")
+
+    with open(test_out, "w") as f:
+        for idx in test_indices:
+            f.write(f"{all_frames[idx]}\n")
+
+    print(f"Total frames: {total}")
+    print(f"Train: {len(train_indices)} -> {train_out}")
+    print(f"Test:  {len(test_indices)} -> {test_out}")
+
+
+def get_model_params(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+
+def get_kl_loss(mu, logvar):
+        return -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp()) 
+
+
+def sample_images(model, dataloader, device, num_samples=8):
+    model.eval()
+    with torch.no_grad():
+        images, _ = next(iter(dataloader))
+        images = images.to(device)
+        recon, _, _ = model(images)
+        recon = recon[:num_samples]
+        images = images[:num_samples]
+
+        # convert to grid and save
+        grid = make_grid(torch.cat([images, recon]), nrow=num_samples)
+        img = torchvision.transforms.ToPILImage()(grid)
+        return img
+

@@ -1,0 +1,35 @@
+dataset:
+  name: 'video'
+  args:
+    video_path: /teamspace/studios/this_studio/dataset/pokemon.mp4
+    frames_dir: /teamspace/studios/this_studio/dataset/frames_128
+    interval: 3.0
+    resolution: 128
+    test_ratio: 0.2
+    start: 20
+  
+
+model:
+  in_ch: 3
+  latent_dim: 128
+  down_channels: [64, 128, 256, 512]
+  attn_channels: [512, 512]
+  num_heads: 16
+  n_layers: 2
+  norm_type: "bn"
+  norm_groups: 32
+  activation: "elu"
+
+
+training:
+  seed: 42
+  batch_size: 48
+  epochs: 300
+  lr: 0.0001
+  weight_decay: 0.00001
+  kl_weight: 0.0001
+  percep_weight: 1
+  num_samples: 8
+  save_interval: 50
+  vae_ckpt_save_dir: "/teamspace/studios/this_studio/model_ckpt_2.0/"
+  recon_img_save_dir: "/teamspace/studios/this_studio/reconstructions_2.0/"

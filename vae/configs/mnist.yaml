@@ -1,0 +1,31 @@
+dataset:
+  name: 'mnist'
+  args:
+    root: './data'
+    resolution: 28
+  
+
+model:
+  in_ch: 1
+  latent_dim: 2
+  down_channels: [32, 64, 128]
+  attn_channels: [128, 128]
+  num_heads: 16
+  n_layers: 2
+  norm_type: "bn"
+  norm_groups: 32
+  activation: "elu"
+
+
+training:
+  seed: 42
+  batch_size: 2000
+  epochs: 100
+  lr: 0.0001
+  weight_decay: 0.00001
+  kl_weight: 0.0001
+  percep_weight: 1
+  num_samples: 8
+  save_interval: 50
+  vae_ckpt_save_dir: "/teamspace/studios/this_studio/model_ckpt_mnist/"
+  recon_img_save_dir: "/teamspace/studios/this_studio/reconstructions_mnist/"
