@@ -8,10 +8,10 @@ import numpy as np
 import argparse
 from tqdm import tqdm
 from pathlib import Path
-from model import VAE
-from model import LPIPS
-from dataset import VideoDataset
-from utils import get_model_params, get_kl_loss, sample_images
+from vae.model.vae import VAE
+from vae.model.lpips import LPIPS
+from vae.dataset import VideoDataset
+from vae.utils import get_model_params, get_kl_loss, sample_images
 from torch.utils.data.dataloader import DataLoader
 
 
@@ -40,7 +40,7 @@ def main():
     dataset_config  = config['dataset']
     dataset_name = dataset_config['name']
     dataset_args = dataset_config['args']
-    model_config    = config['model']
+    model_config = config['model']
     train_config = config['training']
     print("Config loaded successfully from:", args.config)
 
@@ -59,8 +59,8 @@ def main():
 
     # video dataset
     if dataset_name == 'video':
-        train_split = VideoDataset(**dataset_args, split='train', transform=transform)
-        test_split = VideoDataset(**dataset_args, split='test', transform=transform)
+        train_split = VideoDataset(**dataset_args, split='train', transform=transform, seed=seed)
+        test_split = VideoDataset(**dataset_args, split='test', transform=transform, seed=seed)
         train_loader = DataLoader(train_split, batch_size=train_config['batch_size'], shuffle=True)
         test_loader = DataLoader(test_split, batch_size=train_config['batch_size'], shuffle=False)
     

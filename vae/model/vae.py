@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
-from utils import get_norm, get_activation
-from .blocks import upSampleBlock, downSampleBlock, attentionBlock
+from vae.utils import get_norm, get_activation
+from vae.model.blocks import upSampleBlock, downSampleBlock, attentionBlock
 
 
 class Encoder(nn.Module):

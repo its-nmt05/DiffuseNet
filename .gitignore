@@ -1,5 +1,9 @@
 vae/dataset/*.mp4
 vae/dataset/frames_*/
-dataset/frames_128/
+DiT/dataset/frames_*/
+DiT/dataset/*.mp4
+DiT/ckpts/
+DiT/samples/
+wandb/
 __pycache__/
 *.py[cod]

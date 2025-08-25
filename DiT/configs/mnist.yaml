@@ -1,0 +1,46 @@
+dataset:
+  name: 'mnist'
+  args:
+    root: './data'
+    resolution: 28
+
+
+vae:
+  in_ch: 1
+  latent_dim: 2
+  down_channels: [32, 64, 128]
+  attn_channels: [128, 128]
+  num_heads: 16
+  n_layers: 2
+  norm_type: "bn"
+  norm_groups: 32
+  activation: "elu"
+  vae_ckpt: D:\vae_epoch_100.pth
+
+scheduler:
+  beta_start: 0.0001
+  beta_end: 0.02
+  timesteps: 1000
+
+
+dit:
+  latent_size: 7
+  latent_ch: 2
+  patch_size: 1
+  embed_dim: 128
+  time_emb_dim: 128
+  num_layers: 6
+  num_heads: 8
+  mlp_ratio: 1
+
+
+training:
+  seed: 42
+  batch_size: 600
+  epochs: 300
+  lr: 0.0001
+  weight_decay: 0.00001
+  num_samples: 1
+  save_interval: 50
+  ckpt_save_dir: "/teamspace/studios/this_studio/model_ckpt_2.0/"
+  # recon_img_save_dir: "/teamspace/studios/this_studio/reconstructions_2.0/"

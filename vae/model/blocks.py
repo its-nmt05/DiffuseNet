@@ -1,5 +1,5 @@
 import torch.nn as nn
-from utils import get_norm, get_activation
+from vae.utils import get_norm, get_activation
 
 
 class downSampleBlock(nn.Module):

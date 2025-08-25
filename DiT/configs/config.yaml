@@ -1,0 +1,52 @@
+dataset:
+  name: 'video'
+  args:
+    video_path: D:\DiffuseNet\DiT\dataset\pokemon.mp4
+    frames_dir: D:\DiffuseNet\DiT\dataset\frames_128
+    interval: 3.0
+    resolution: 128
+    test_ratio: 0.2
+    start: 20
+
+
+vae:
+  in_ch: 3
+  latent_dim: 128
+  down_channels: [64, 128, 256, 512]
+  attn_channels: [512, 512]
+  num_heads: 16
+  n_layers: 2
+  norm_type: "bn"
+  norm_groups: 32
+  activation: "elu"
+  vae_ckpt: D:\vae_epoch_300_[pokemon].pth
+
+
+scheduler:
+  beta_start: 0.0001
+  beta_end: 0.02
+  timesteps: 500
+
+
+dit:
+  latent_size: 16
+  latent_ch: 128
+  patch_size: 1
+  embed_dim: 256
+  time_emb_dim: 256
+  num_layers: 6
+  num_heads: 8
+  mlp_ratio: 4
+
+
+training:
+  seed: 42
+  batch_size: 20
+  epochs: 1000
+  lr: 0.0001
+  weight_decay: 0.00001
+  num_samples: 1
+  ckpt_save_interval: 200
+  sample_save_interval: 10
+  ckpt_save_dir: D:\DiffuseNet\DiT\ckpts\
+  sample_save_dir: D:\DiffuseNet\DiT\samples\

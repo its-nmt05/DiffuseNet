@@ -1,7 +1,7 @@
 import os
 from torch.utils.data import Dataset
 from PIL import Image
-from utils import extract_frames, assign_frames
+from vae.utils import extract_frames, assign_frames
 
 
 class VideoDataset(Dataset):
