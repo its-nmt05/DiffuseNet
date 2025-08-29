@@ -17,7 +17,7 @@ class PatchEmbed(nn.Module):
 
         # save pos embedding
         pos = get_pos_embedding(self.embed_dim, (self.num_patches, self.num_patches))
-        self.pos_embed = self.register_buffer('pos_embed', pos)
+        self.register_buffer('pos_embed', pos)
 
     def forward(self, x):
         x = self.unfold(x)  # (B, C, H, W) -> (B, C*P*P, N)

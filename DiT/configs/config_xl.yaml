@@ -1,0 +1,58 @@
+dataset:
+  name: 'video'
+  args:
+    video_path: /home/users/ntu/ccdsnirm/projects/minecraft2.mp4
+    frames_dir: /home/users/ntu/ccdsnirm/projects/DiffuseNet/dataset/frames_256
+    interval: 3.0
+    resolution: 256
+    test_ratio: 0.2
+    start: 60
+
+
+vae:
+  in_ch: 3
+  latent_dim: 64
+  down_channels: [128, 128, 256, 256, 512, 512]
+  attn_channels: [512, 512]
+  num_heads: 16
+  n_layers: 2
+  norm_type: "bn"
+  norm_groups: 32
+  activation: "elu"
+  vae_ckpt: /home/users/ntu/ccdsnirm/projects/DiffuseNet/vae/ckpts/2.0/vae/vae_epoch_300.pth
+
+
+scheduler:
+  beta_start: 0.0001
+  beta_end: 0.02
+  timesteps: 500
+
+
+dit:
+  latent_size: 8
+  latent_ch: 64
+  patch_size: 1
+  embed_dim: 1024
+  time_emb_dim: 1024
+  num_layers: 32
+  num_heads: 32
+  mlp_ratio: 4
+
+
+training:
+  seed: 42
+  batch_size: 64
+  epochs: 1000
+  lr: 0.0001
+  weight_decay: 0.00001
+  num_samples: 1
+  ckpt_save_interval: 200
+  sample_save_interval: 10
+  vae_scale: 0.431
+  ckpt_save_dir: /home/users/ntu/ccdsnirm/projects/DiffuseNet/DiT/ckpts/large
+  sample_save_dir: /home/users/ntu/ccdsnirm/projects/DiffuseNet/DiT/samples/large
+
+
+wandb:
+  project: 'DiT'
+  name: 'train_DiT-large'

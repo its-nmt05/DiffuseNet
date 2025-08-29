@@ -29,6 +29,11 @@ def parse_args():
         default=Path(__file__).parent / 'model' / 'config.yaml',
         help='Path to the config file'
     )
+    parser.add_argument(
+        '--no_wandb',
+        action='store_true',
+        help='Disable wandb logging'
+    )
     return parser.parse_args()
 
 
@@ -37,7 +42,7 @@ def load_config(config_path: Path) -> dict:
         return yaml.safe_load(f)
 
 
-def train(model, vae, scheduler, dataset_config, train_config, device='cuda'):
+def train(model, vae, scheduler, dataset_config, train_config, log_wandb=True, device='cuda'):
     num_epochs = train_config['epochs']
     batch_size = train_config['batch_size']
     lr = train_config['lr']
@@ -88,6 +93,7 @@ def train(model, vae, scheduler, dataset_config, train_config, device='cuda'):
 
             with torch.no_grad():
                 latents, _, _ = vae.encode(images)
+                latents = latents / train_config['vae_scale']
                 
             t = scheduler.sample_timesteps(latents.shape[0]).to(device)
             x_t, noise = scheduler.add_noise(latents, t)
@@ -101,14 +107,14 @@ def train(model, vae, scheduler, dataset_config, train_config, device='cuda'):
         
             train_losses.append(loss.item())    
 
-            wandb.log({
-                'lr': optimizer.param_groups[0]['lr'],
-                'train_loss': loss.item(),
-                'latent_mu': latents.mean().item(),
-                'latent_std': latents.std().item(),
-                'pred_mu': predicted_noise.mean().item(),
-                'pred_std': predicted_noise.std().item(),
-            })
+            if log_wandb:
+                wandb.log({
+                    'train_loss': loss,
+                    'latent_mu': latents.mean(),
+                    'latent_std': latents.std(),
+                    'pred_mu': predicted_noise.mean(),
+                    'pred_std': predicted_noise.std(),
+                })
 
         # Validation phase
         model.eval()
@@ -122,10 +128,11 @@ def train(model, vae, scheduler, dataset_config, train_config, device='cuda'):
                 predicted_noise = model(x_t, t)
                 val_loss = recon_criterion(predicted_noise, noise)
                 val_losses.append(val_loss.item())
-
-                wandb.log({
-                    'val_loss': val_loss.item()
-                })
+                
+                if log_wandb:
+                    wandb.log({
+                        'val_loss': val_loss.item()
+                    })
 
         print(f"Epoch {epoch+1}/{num_epochs} | Train Loss: {np.mean(train_losses):.4f} | Val Loss: {np.mean(val_losses):.4f}")
 
@@ -137,12 +144,13 @@ def train(model, vae, scheduler, dataset_config, train_config, device='cuda'):
         # sample and save images
         if (epoch + 1) % sample_save_interval == 0:
             save_path = os.path.join(sample_save_dir, f'epoch_{epoch+1}.png')
-            out = sample_images(model, vae, scheduler, num_samples, device=device)
+            out = sample_images(model, vae, scheduler, num_samples, vae_scale=train_config['vae_scale'], device=device)
             out.save(save_path)
             out.close()
 
-            wandb.log({'sample_image': wandb.Image(save_path)})
-            print(f"Sampled image at epoch {epoch+1}")
+            if log_wandb:
+                wandb.log({'sample_image': wandb.Image(save_path)})
+                print(f"Sampled image at epoch {epoch+1}")
 
     print("Finished training!!!")
 
@@ -152,16 +160,21 @@ def main():
     config = load_config(args.config)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    # setup wandb logging
-    wandb.init(project="DiT", name="train-DiT", config=config['training'])
-
     # load dataset, vae, DiT, and training configs
     dataset_config = config['dataset']
     vae_config = config['vae']
     scheduler_config = config['scheduler']
     dit_config = config['dit']
     train_config = config['training']
+    wandb_config = config['wandb']
     print("Config loaded successfully from:", args.config)
+
+    # setup wandb logging
+    log_wandb = not args.no_wandb
+    if log_wandb:
+        wandb.init(project=wandb_config['project'], name=wandb_config['name'], config=config)
+    else:
+        print("Diabling WandB logging!!")
 
     # set a seed for reproducibility
     seed = train_config['seed']
@@ -177,7 +190,7 @@ def main():
     vae_ckpt = vae_config['vae_ckpt']
     
     if vae_ckpt and os.path.exists(vae_ckpt):
-        vae.load_state_dict(torch.load(vae_ckpt, map_location=device))
+        vae.load_state_dict(torch.load(vae_ckpt, map_location=device, weights_only=True))
         print(f"VAE loaded successfully from: {vae_ckpt}")
     else:
         print(f"VAE checkpoint not found at {vae_ckpt}, using untrained VAE")
@@ -200,10 +213,11 @@ def main():
     model.train()
     print(f"DiT model loaded successfully: {get_model_params(model) // 1e6:.2f} M parameters")
 
-    train(model, vae, scheduler, dataset_config=dataset_config, train_config=train_config, device=device)
+    train(model, vae, scheduler, dataset_config=dataset_config, train_config=train_config, log_wandb=log_wandb, device=device)
 
     # finish logging
-    wandb.finish()
+    if log_wandb:
+        wandb.finish()
 
 
 if __name__ == "__main__":

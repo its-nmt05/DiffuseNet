@@ -1,0 +1,43 @@
+dataset:
+  name: 'video'
+  args:
+    video_path: /home/users/ntu/ccdsnirm/projects/minecraft2.mp4
+    frames_dir: /home/users/ntu/ccdsnirm/projects/DiffuseNet/dataset/frames_256
+    interval: 2
+    resolution: 256
+    test_ratio: 0.2
+    start: 60
+  
+
+model:
+  in_ch: 3
+  latent_dim: 64
+  down_channels: [128, 128, 256, 256, 512, 512]  # num_down = len(down_channels)-1
+  attn_channels: [512, 512]
+  num_heads: 16
+  n_layers: 2
+  norm_type: "bn"
+  norm_groups: 32
+  activation: "elu"
+
+
+training:
+  seed: 42
+  batch_size: 20
+  epochs: 300
+  lr: 0.0001
+  weight_decay: 0.00001
+  disc_start: 1000
+  disc_weight: 0.5
+  kl_weight: 0.000005
+  percep_weight: 1
+  num_samples: 8
+  save_interval: 50
+  vae_ckpt_save_dir: /home/users/ntu/ccdsnirm/projects/DiffuseNet/vae/ckpts/2.0/vae
+  disc_ckpt_save_dir: /home/users/ntu/ccdsnirm/projects/DiffuseNet/vae/ckpts/2.0/disc
+  recon_img_save_dir: /home/users/ntu/ccdsnirm/projects/DiffuseNet/vae/ckpts/2.0/vae
+
+
+wandb:
+  project: 'VAE'
+  name: 'train_vae-xl'

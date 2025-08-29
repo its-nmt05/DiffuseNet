@@ -1,5 +1,6 @@
 import os
 import cv2
+import math
 import random
 import torch
 import torch.nn as nn
@@ -18,16 +19,18 @@ def get_norm(norm_type='bn', norm_channels=32, num_groups=None):
         raise ValueError(f"Unsupported normalization type: {norm_type}")
     
 
-def get_activation(activation_type='relu'):
+def get_activation(activation_type='relu', **kwargs):
     activation_type = activation_type.lower()
     if activation_type == 'silu':
-        return nn.SiLU()
+        return nn.SiLU(**kwargs)
     elif activation_type == 'gelu':
-        return nn.GELU()    
+        return nn.GELU(**kwargs)    
     elif activation_type == 'elu':
-        return nn.ELU()
+        return nn.ELU(**kwargs)
+    elif activation_type == 'leakyrelu':
+        return nn.LeakyReLU(kwargs.get('negative_slope', 0.2))
     else: 
-        raise ValueError(f"Activation type '{activation_type}' not in list of supported activations: ['silu', 'gelu', 'elu']")
+        raise ValueError(f"Activation type '{activation_type}' not in list of supported activations: ['silu', 'gelu', 'elu', 'leakyrelu']")
 
 
 # extract frames from video with specified parameters
@@ -120,8 +123,10 @@ def get_model_params(model):
 
 
 def get_kl_loss(mu, logvar):
-        return -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp()) 
-
+    kl = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp()) # (B, C, H, W)
+    kl = kl.flatten(1).sum(dim=1) # [B, C, H, W] -> [B, C*H*W] -> [B]
+    return kl.mean()
+    
 
 def sample_images(model, dataloader, device, num_samples=8):
     model.eval()

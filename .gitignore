@@ -1,9 +1,10 @@
-vae/dataset/*.mp4
-vae/dataset/frames_*/
-DiT/dataset/frames_*/
-DiT/dataset/*.mp4
+dataset/*.mp4
+dataset/frames_*/
 DiT/ckpts/
 DiT/samples/
+vae/ckpts/
+vae/reconstructions/
 wandb/
 __pycache__/
 *.py[cod]
+*.sh
