@@ -15,7 +15,7 @@ import wandb
 from vae.model.vae import VAE
 from vae.model.discriminator import Discriminator
 from vae.model.lpips import LPIPS
-from vae.dataset.VideoDataset import VideoDataset
+from dataset.VideoDataset import VideoDataset
 from vae.utils import get_model_params, get_kl_loss, sample_images
 
 

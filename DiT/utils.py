@@ -60,7 +60,7 @@ def get_pos_embedding(pos_emb_dim, grid_size):
     return pos_emb
 
 
-def sample_images(dit, vae, scheduler, num_samples=8, vae_scale, device='cuda'):
+def sample_images(dit, vae, scheduler, vae_scale, num_samples=8, device='cuda'):
     T = scheduler.timesteps
     dit.eval()
     vae.eval()

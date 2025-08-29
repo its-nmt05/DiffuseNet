@@ -17,7 +17,7 @@ from DiT import DiT
 from DiT.utils import get_model_params, sample_images
 from diffusion.linear_noise_scheduler import LinearNoiseScheduler
 from vae.model.vae import VAE
-from vae.dataset.VideoDataset import VideoDataset
+from dataset.VideoDataset import VideoDataset
 
 
 def parse_args():
@@ -145,7 +145,7 @@ def train(model, vae, scheduler, dataset_config, train_config, log_wandb=True, d
         # sample and save images
         if (epoch + 1) % sample_save_interval == 0:
             save_path = os.path.join(sample_save_dir, f'epoch_{epoch+1}.png')
-            out = sample_images(model, vae, scheduler, num_samples, vae_scale=train_config['vae_scale'], device=device)
+            out = sample_images(model, vae, scheduler, vae_scale=train_config['vae_scale'], num_samples=num_samples, device=device)
             out.save(save_path)
             out.close()
 
