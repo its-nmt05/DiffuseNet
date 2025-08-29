@@ -122,6 +122,7 @@ def train(model, vae, scheduler, dataset_config, train_config, log_wandb=True, d
             for images, _ in tqdm(test_loader, desc=f"Epoch {epoch+1}/{num_epochs} - Validation"):
                 images = images.to(device)
                 latents, _, _ = vae.encode(images)
+                latents = latents / train_config['vae_scale']
 
                 t = scheduler.sample_timesteps(latents.shape[0]).to(device)
                 x_t, noise = scheduler.add_noise(latents, t)
