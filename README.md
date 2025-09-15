@@ -39,7 +39,12 @@ The VAE was trained on `256x256` Minecraft images and outputs latents of dim `64
 ## DiT
 Implementation of Diffusion Transformer inspired by the original [DiT paper](https://arxiv.org/abs/2212.09748). The model uses transformer blocks with timesteps conditioned through `adaLN` Tested both small (76 M) and large (608 M) variants on the Minecraft dataset using our pre-trained VAE. All the models were trained on an NVIDIA A100.
 
-<img src="./images/DiT/DiT_samples.png" width="75%" />
+<div style="display: flex; gap: 1rem; margin-bottom:1rem;">
+    <img src="./images/DiT/DiT_samples_minecraft.png" alt="dit_minecraft" width="48%">
+    <img src="./images/DiT/DiT_samples_pokemon.png" alt="dit_pokemon" width="48%">
+</div> 
+
+
 
 To train on your own dataset, modify `config.yaml` files and run:
 
