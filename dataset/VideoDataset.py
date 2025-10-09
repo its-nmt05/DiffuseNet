@@ -5,6 +5,7 @@ from vae.utils import extract_frames, assign_frames, load_cached_latents
 import subprocess
 import csv
 
+
 class VideoDataset(Dataset):
     def __init__(
         self,
@@ -101,7 +102,9 @@ class VideoDataset(Dataset):
 
         # load cached latents
         if self.use_latents:
-            self.latent_maps = load_cached_latents(vae_latent_save_dir)
+            latents = load_cached_latents(vae_latent_save_dir)
+            frames = set(frame for frame, _ in self.samples)
+            self.latent_maps = {k: v for k, v in latents.items() if k in frames}
 
     def __len__(self):
         return len(self.samples)

@@ -57,6 +57,9 @@ class DitTrainer:
             if torch.cuda.is_available():
                 torch.cuda.manual_seed_all(seed)
 
+        # using TF32 for FP32 matmul operations
+        torch.set_float32_matmul_precision('high')
+
         # load vae
         self.vae = VAE(config=self.vae_config).to(self.device)
         vae_ckpt = self.vae_config['vae_ckpt']
@@ -158,7 +161,7 @@ class DitTrainer:
             for im, captions in tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs} - Training"):
                 
                 # use cached latents
-                if test_split.use_latents:
+                if train_split.use_latents:
                     latents = im.to(self.device)
                 else:
                     with torch.no_grad():
@@ -167,15 +170,16 @@ class DitTrainer:
 
                 t = self.scheduler.sample_timesteps(latents.shape[0]).to(self.device)
                 x_t, noise = self.scheduler.add_noise(latents, t)
-                
-                # extract text embds with dropout
-                if self.use_cond:
-                    context, mask = self.text_encoder(captions, apply_dropout=True)
-                    predicted_noise = self.model(x_t, t, y=context, mask=mask)
-                else:
-                    predicted_noise = self.model(x_t, t)
+            
+                with torch.autocast(device_type=self.device.type, dtype=torch.bfloat16):
+                    if self.use_cond:
+                        # extract text embds with dropout
+                        context, mask = self.text_encoder(captions, apply_dropout=True)
+                        predicted_noise = self.model(x_t, t, y=context, mask=mask)
+                    else:
+                        predicted_noise = self.model(x_t, t)
 
-                loss = recon_criterion(predicted_noise, noise) 
+                    loss = recon_criterion(predicted_noise, noise) 
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -207,17 +211,18 @@ class DitTrainer:
 
                     t = self.scheduler.sample_timesteps(latents.shape[0]).to(self.device)
                     x_t, noise = self.scheduler.add_noise(latents, t)
-
-                    # extract text embds without dropout
-                    if self.use_cond:
-                        context, mask = self.text_encoder(captions, apply_dropout=True)
-                        predicted_noise = self.model(x_t, t, y=context, mask=mask)
-                    else:
-                        predicted_noise = self.model(x_t, t)
-
-                    val_loss = recon_criterion(predicted_noise, noise)
-                    val_losses.append(val_loss.item())
                     
+                    with torch.autocast(device_type=self.device.type, dtype=torch.bfloat16):
+                        if self.use_cond:
+                            # extract text embds without dropout
+                            context, mask = self.text_encoder(captions, apply_dropout=True)
+                            predicted_noise = self.model(x_t, t, y=context, mask=mask)
+                        else:
+                            predicted_noise = self.model(x_t, t)
+
+                        val_loss = recon_criterion(predicted_noise, noise)
+                        
+                    val_losses.append(val_loss.item())
                     if self.log_wandb:
                         wandb.log({
                             'val_loss': val_loss.item()
