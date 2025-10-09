@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from DiT.utils import modulate, get_pos_embedding, get_time_embedding
+from transformers import DistilBertModel, DistilBertTokenizer, CLIPTokenizer, CLIPTextModel
 
 
 class PatchEmbed(nn.Module):
@@ -42,7 +43,58 @@ class TimeEmbed(nn.Module):
     def forward(self, t):
         time_emb = get_time_embedding(t, self.time_emb_dim)
         return self.time_mlp(time_emb)
-    
+
+
+class TextEmbed():
+
+    def __init__(self, text_embed_model, dropout_prob, max_length=77, device='cuda'):
+        self.dropout_prob = dropout_prob
+        self.max_length = max_length
+        self.device = device
+
+        assert text_embed_model in ('bert', 'clip'), "Text model can only be one of clip or bert"
+
+        if text_embed_model == 'bert':
+            self.tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
+            self.text_embed_model = DistilBertModel.from_pretrained('distilbert-base-uncased').to(self.device)
+        else: 
+            self.tokenizer = CLIPTokenizer.from_pretrained('openai/clip-vit-base-patch16')
+            self.text_embed_model = CLIPTextModel.from_pretrained('openai/clip-vit-base-patch16').to(self.device)
+
+        self.text_embed_model.eval()
+
+    def encode(self, text):
+        tokens = self.tokenizer(
+            text, 
+            padding='max_length',    
+            truncation=True,          
+            max_length=self.max_length,
+            return_attention_mask=True,
+            return_tensors='pt'
+        )
+
+        input_ids = tokens['input_ids'].to(self.device)
+        attention_mask = tokens['attention_mask'].to(self.device)
+        
+        with torch.no_grad():
+            text_emb = self.text_embed_model(input_ids, attention_mask).last_hidden_state
+
+        return text_emb, attention_mask   # [B, L, D]
+        
+    def __call__(self, texts, apply_dropout=False):
+        text_emb, attn_mask = self.encode(texts)
+        empty_text_emb, empty_mask = self.encode([''])
+
+        # apply conditional dropout 
+        if apply_dropout and self.dropout_prob > 0:
+            drop_mask = torch.rand(text_emb.shape[0], device=self.device) < self.dropout_prob
+            text_emb[drop_mask, :, :] = empty_text_emb[0]
+            attn_mask[drop_mask, :] = empty_mask[0] 
+
+        attn_mask = ~attn_mask.bool()
+
+        return text_emb, attn_mask
+
 
 class DiT(nn.Module):
     
@@ -55,9 +107,15 @@ class DiT(nn.Module):
         self.num_layers = config['num_layers']
         self.num_heads = config['num_heads']
         self.time_emb_dim = config['time_emb_dim']
+        self.text_embed_dim = config['cond_config']['text_emb_dim']
 
         self.patchify_block = PatchEmbed(self.latent_size, self.latent_ch, self.patch_size, self.embed_dim)
         self.time_embd = TimeEmbed(self.time_emb_dim, self.embed_dim)
+        self.text_embd = nn.Sequential(
+            nn.Linear(self.text_embed_dim, self.embed_dim),
+            nn.SiLU(),
+            nn.Linear(self.embed_dim, self.embed_dim)
+        )
         
         self.layers = nn.ModuleList([
             DiTBlock(config=config) for _ in range(self.num_layers)
@@ -85,12 +143,15 @@ class DiT(nn.Module):
         x = x.reshape(b, self.latent_ch, grid_size * self.patch_size, grid_size * self.patch_size)  # (B, C, G, P, G, P) -> (B, C, H, W)
         return x
     
-    def forward(self, x, t):
+    def forward(self, x, t, y=None, mask=None):
         x = self.patchify_block(x)        
         time_emb = self.time_embd(t)
 
+        if y is not None:
+            y = self.text_embd(y)
+
         for layer in self.layers:
-            x = layer(x, time_emb)  
+            x = layer(x, time_emb, y=y, mask=mask)  
 
         scale, shift = self.adaptive_norm_block(time_emb).chunk(2, dim=1)
         x = modulate(self.norm(x), scale, shift)
@@ -108,13 +169,16 @@ class DiTBlock(nn.Module):
         self.num_heads = config['num_heads']
         self.ffwd_hidden_dim = int(self.embed_dim * config.get('mlp_ratio', 1))
         
-        # attn norm
+        # self-attn 
         self.norm1 = nn.LayerNorm(self.embed_dim, elementwise_affine=False, eps=1e-6)
+        self.self_attn = nn.MultiheadAttention(self.embed_dim, self.num_heads, batch_first=True)
 
-        self.attn_block = nn.MultiheadAttention(self.embed_dim, self.num_heads, batch_first=True)
+        # cross-attn
+        self.norm2 = nn.LayerNorm(self.embed_dim, elementwise_affine=False, eps=1e-6)
+        self.cross_attn = nn.MultiheadAttention(self.embed_dim, self.num_heads, batch_first=True)
 
         # ffwd norm
-        self.norm2 = nn.LayerNorm(self.embed_dim, elementwise_affine=False, eps=1e-6)
+        self.norm3 = nn.LayerNorm(self.embed_dim, elementwise_affine=False, eps=1e-6)
 
         self.ffwd_block = nn.Sequential(
             nn.Linear(self.embed_dim, self.ffwd_hidden_dim),
@@ -135,14 +199,17 @@ class DiTBlock(nn.Module):
         nn.init.xavier_uniform_(self.adaptive_norm_block[-1].weight)
         nn.init.zeros_(self.adaptive_norm_block[-1].bias)
  
-    def forward(self, x, cond):
-        affine_params = self.adaptive_norm_block(cond).chunk(6, dim=1)
+    def forward(self, x, t, y=None, mask=None):
+        affine_params = self.adaptive_norm_block(t).chunk(6, dim=1)
         scale_attn, shift_attn, scale_res_attn, scale_ffwd, shift_ffwd, scale_res_ffwd = affine_params
-        x_attn = modulate(self.norm1(x), scale_attn, shift_attn) # LN(x)*(1 + scale(cond)) + shift(cond)
-        x_attn, _ = self.attn_block(x_attn, x_attn, x_attn) 
+        x_attn = modulate(self.norm1(x), scale_attn, shift_attn) # LN(x)*(1 + scale(t)) + shift(t)
+        x_attn, _ = self.self_attn(x_attn, x_attn, x_attn) 
         x = x + x_attn * scale_res_attn.unsqueeze(1)
 
-        x_ffwd = modulate(self.norm2(x), scale_ffwd, shift_ffwd) # LN(x)*(1 + scale(cond)) + shift(cond)
+        if self.cross_attn: # add cross-attn residual
+            x = x + self.cross_attn(self.norm2(x), y, y, key_padding_mask=mask)[0]
+
+        x_ffwd = modulate(self.norm3(x), scale_ffwd, shift_ffwd) # LN(x)*(1 + scale(t)) + shift(t)
         x_ffwd = self.ffwd_block(x_ffwd)
         x = x + x_ffwd * scale_res_ffwd.unsqueeze(1)    
         return x

@@ -1,9 +1,9 @@
 dataset:
   name: 'video'
   args:
-    video_path: /home/users/ntu/ccdsnirm/projects/minecraft2.mp4
+    video_path: /home/users/ntu/ccdsnirm/projects/pokemon.mp4
     frames_dir: /home/users/ntu/ccdsnirm/projects/DiffuseNet/dataset/frames_256
-    interval: 2
+    interval: 3.0
     resolution: 256
     test_ratio: 0.2
     start: 60
@@ -35,7 +35,7 @@ training:
   save_interval: 50
   vae_ckpt_save_dir: /home/users/ntu/ccdsnirm/projects/DiffuseNet/vae/ckpts/2.0/vae
   disc_ckpt_save_dir: /home/users/ntu/ccdsnirm/projects/DiffuseNet/vae/ckpts/2.0/disc
-  recon_img_save_dir: /home/users/ntu/ccdsnirm/projects/DiffuseNet/vae/ckpts/2.0/vae
+  recon_img_save_dir: /home/users/ntu/ccdsnirm/projects/DiffuseNet/vae/reconstructions/
 
 
 wandb:

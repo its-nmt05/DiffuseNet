@@ -1,11 +1,17 @@
 import os
-import cv2
-import math
+import glob
 import random
+import pickle
+
+from tqdm import tqdm
+from PIL import Image
+
 import torch
 import torch.nn as nn
-import torchvision
+from torchvision import transforms
 from torchvision.utils import make_grid
+import torchvision
+import cv2
 
 
 def get_norm(norm_type='bn', norm_channels=32, num_groups=None):
@@ -142,3 +148,44 @@ def sample_images(model, dataloader, device, num_samples=8):
         img = torchvision.transforms.ToPILImage()(grid)
         return img
 
+
+def cache_latents(vae, frames_dir, latent_save_dir, vae_scale, batch_size=128, device='cuda'):
+    os.makedirs(latent_save_dir, exist_ok=True)
+    latent_save_path = os.path.join(latent_save_dir, 'vae_latents.pkl')
+    latent_maps = {}
+
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+    ])
+
+    # load all img paths
+    all_frames = sorted(glob.glob(os.path.join(frames_dir, '*')))
+
+    vae.eval()
+    with torch.no_grad():
+        for i in tqdm(range(0, len(all_frames), batch_size), desc='Caching latents: '):
+            batched_paths = all_frames[i:i+batch_size]
+            batched_frames = [transform(Image.open(p).convert('RGB')) for p in batched_paths]
+            batched_frames = torch.stack(batched_frames).to(device)
+
+            latents, _, _ = vae.encode(batched_frames)
+            latents = latents / vae_scale
+
+            for idx, path in enumerate(batched_paths):
+                fname = os.path.basename(path) 
+                latent_maps[fname] = [latents[idx].cpu()]
+
+        # save all the latents
+        with open(latent_save_path, 'wb') as f:
+            pickle.dump(latent_maps, f)
+
+        print(f"Cached latents for {len(all_frames)} images to {latent_save_path}")
+
+
+def load_cached_latents(latent_save_dir):
+    latent_maps = {}
+    for fname in glob.glob(os.path.join(latent_save_dir, '*.pkl')):
+        s = pickle.load(open(fname, 'rb'))
+        for k, v in s.items():
+            latent_maps[k] = v[0]   # unwrap from the list
+        return latent_maps  

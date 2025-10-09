@@ -60,16 +60,43 @@ def get_pos_embedding(pos_emb_dim, grid_size):
     return pos_emb
 
 
-def sample_images(dit, vae, scheduler, vae_scale, num_samples=8, device='cuda'):
+def sample_images(trainer, vae_scale, input_prompt, num_samples=8, cfg_guidance_scale=1.0):
+    # grab references from trainer
+    scheduler = trainer.scheduler
+    dit = trainer.model
+    vae = trainer.vae
+    text_encoder = trainer.text_encoder
+    device = trainer.device
     T = scheduler.timesteps
-    dit.eval()
+
+    trainer.model.eval()
     vae.eval()
+
+    if trainer.text_encoder:
+        assert input_prompt is not None, "input_prompt cannot be none when text_encoder is used"
+        context, mask = text_encoder(input_prompt) # [N, L, D]
+        context_empty, mask_empty = text_encoder([''])    # [1, L, D], [1, L]
+        
+        context_empty = context_empty.repeat(num_samples, 1, 1) # [1, L, D] -> [N, L, D]
+        mask_empty = mask_empty.repeat(num_samples, 1)  # [1, L] -> [N, L]         
 
     x_t = torch.randn(num_samples, dit.latent_ch, dit.latent_size, dit.latent_size, device=device)
     with torch.no_grad():   
         for i in reversed(range(0, T)):
             t = torch.full((num_samples,), i, device=device, dtype=torch.long)
-            predicted_noise = dit(x_t, t)
+
+            if text_encoder:
+                x_b = torch.cat([x_t, x_t], dim=0)
+                t_b = torch.cat([t, t], dim=0)
+                y_b = torch.cat([context_empty, context], dim=0)
+                mask_b = torch.cat([mask_empty, mask], dim=0)
+
+                predicted_b = dit(x_b, t_b, y=y_b, mask=mask_b)
+                pred_uncond, pred_cond = torch.chunk(predicted_b, 2, dim=0)
+                predicted_noise = pred_uncond + cfg_guidance_scale * (pred_cond - pred_uncond)
+            else:
+                predicted_noise = dit(x_t, t)
+
             alphas_t = scheduler.alphas[t][:, None, None, None]
             alphas_cumprod_t = scheduler.alphas_cumprod[t][:, None, None, None]
             beta_t = scheduler.betas[t][:, None, None, None]

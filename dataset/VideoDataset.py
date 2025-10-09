@@ -1,14 +1,18 @@
 import os
 from torch.utils.data import Dataset
 from PIL import Image
-from vae.utils import extract_frames, assign_frames
-
+from vae.utils import extract_frames, assign_frames, load_cached_latents
+import subprocess
+import csv
 
 class VideoDataset(Dataset):
     def __init__(
         self,
         video_path,
         frames_dir,
+        hf_cache_dir,
+        vae_latent_save_dir,
+        use_latents=True,
         split='train',
         transform=None,
         interval=1.0,
@@ -19,19 +23,24 @@ class VideoDataset(Dataset):
         end=None
     ):
         """
-        video_path:   path to your .mp4/.avi/etc
-        frames_dir:   where to dump/read extracted frames
-        split:        "train" or "test"
-        transform:    any torchvision transforms
-        interval:     seconds between frames
-        resolution:   int or None (square resize)
-        test_ratio:   fraction of frames to hold out
-        seed:         random seed for split
+        video_path:          path to your .mp4/.avi/etc
+        frames_dir:          where to dump/read extracted frames
+        hf_cache_dir:        Cache dir to store HF models locally
+        use_latents:         use precomputed latents instead
+        vae_latent_save_dir: dir to save precomputed latents
+        split:               "train" or "test"
+        transform:           any torchvision transforms
+        interval:            seconds between frames
+        resolution:          int or None (square resize)
+        test_ratio:          fraction of frames to hold out
+        seed:                random seed for split
         """
         self.video_path = video_path
         self.frames_dir = frames_dir
         self.split = split
         self.transform = transform
+        self.latent_maps = None
+        self.use_latents = use_latents
 
         os.makedirs(frames_dir, exist_ok=True)
 
@@ -66,16 +75,46 @@ class VideoDataset(Dataset):
 
         index_file = train_idx if split == 'train' else test_idx
         with open(index_file, 'r') as f:
-            self.samples = [line.strip() for line in f if line.strip()]
+            indices = [line.strip() for line in f if line.strip()]
+
+        # check for captions file
+        captions = {}
+        captions_file = os.path.join(parent, 'captions.csv')
+        
+        # captions don't exit, generate them
+        if not os.path.isfile(captions_file):
+            script_path = os.path.join(os.path.dirname(__file__), "extract_captions.py")
+            subprocess.run([
+                "python", script_path,
+                "--hf_cache_dir", hf_cache_dir,
+                "--frames_dir", frames_dir,
+                "--batch_size", "256",
+            ])  
+
+        with open(captions_file, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                captions[row['image']] = row['caption']
+
+        # create combined (img, caption) list
+        self.samples = [(frame, captions[frame]) for frame in indices]
+
+        # load cached latents
+        if self.use_latents:
+            self.latent_maps = load_cached_latents(vae_latent_save_dir)
 
     def __len__(self):
         return len(self.samples)
 
     def __getitem__(self, idx):
-        img_name = self.samples[idx]
-        img_path = os.path.join(self.frames_dir, img_name)
-        image = Image.open(img_path).convert('RGB')
-        if self.transform:
-            image = self.transform(image)
-        return image, idx
+        img_name, caption = self.samples[idx]
 
+        # serve latents directly
+        if self.use_latents:
+            return self.latent_maps[img_name], caption
+        else:
+            img_path = os.path.join(self.frames_dir, img_name)
+            image = Image.open(img_path).convert('RGB')
+            if self.transform:
+                image = self.transform(image)
+            return image, caption
