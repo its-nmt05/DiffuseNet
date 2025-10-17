@@ -51,13 +51,13 @@ Used [Qwen-2.5VL](https://github.com/QwenLM/Qwen3-VL) for extracting captions fo
 
 | ![text_cond_img1](./images/DiT/text-cond/img.png) | ![text_cond_img2](./images/DiT/text-cond/img2.png) |
 |:-----------------------------------------------:|:-----------------------------------------------:|
-| *Red-haired character standing beside a vibrant blue water body, soft daylight, serene atmosphere* | *Red-haired character walking through dense forest, overcast day, pixelated art style, serene atmosphere, lush greenery surrounding the path* |
+| *Red-haired character standing beside a **vibrant blue water body**, soft daylight, serene atmosphere* | *Red-haired character **walking through dense forest**, overcast day, pixelated art style, serene atmosphere, **lush greenery** surrounding the path* |
 
-| ![text_cond_img1](./images/DiT/text-cond/img3.png) | ![text_cond_img2](./images/DiT/text-cond/img4.png) |
+| ![text_cond_img3](./images/DiT/text-cond/img3.png) | ![text_cond_img4](./images/DiT/text-cond/img4.png) |
 |:-----------------------------------------------:|:-----------------------------------------------:|
-| *Small orange lizard-like creature with flames on its tail, battling with a yellow mouse pokemon with lightning and thunder* | *A red-roofed healing center in a vibrant green field, daytime, close-up, peaceful atmosphere with gentle sunlight* |
+| *Small **orange lizard-like creature** with flames on its tail, battling with a **yellow mouse pokemon** with lightning and thunder* | *A **red-roofed healing center** in a vibrant green field, daytime, close-up, peaceful* |
 
-These generations were tested within a suitable cfg guidance scale of 5-20.
+All these generations were tested within a suitable cfg guidance scale of 5-20.
 
 ## DDPM Generations
 
