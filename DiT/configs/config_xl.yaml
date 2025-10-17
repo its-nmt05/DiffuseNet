@@ -2,7 +2,7 @@ dataset:
   name: 'video'
   args:
     video_path: /home/users/ntu/ccdsnirm/projects/pokemon.mp4
-    frames_dir: /home/users/ntu/ccdsnirm/projects/DiffuseNet/dataset/frames_256
+    frames_dir: cddataset/frames_256
     interval: 3.0
     resolution: 256
     test_ratio: 0.2

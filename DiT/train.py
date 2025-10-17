@@ -65,8 +65,12 @@ class DitTrainer:
         vae_ckpt = self.vae_config['vae_ckpt']
         
         if vae_ckpt and os.path.exists(vae_ckpt):
-            self.vae.load_state_dict(torch.load(vae_ckpt, map_location=self.device, weights_only=True))
-            print(f"VAE loaded successfully from: {vae_ckpt}")
+            ckpt = torch.load(vae_ckpt, map_location=self.device, weights_only=True)
+            if 'vae' in ckpt:
+                self.vae.load_state_dict(ckpt['vae'])
+                print(f"VAE loaded successfully from: {vae_ckpt}")
+            else:
+                print(f"Key 'vae' not found in ckpt: {vae_ckpt}, skipping load...")
         else:
             print(f"VAE checkpoint not found at {vae_ckpt}, using untrained VAE")
 
@@ -97,15 +101,14 @@ class DitTrainer:
         else:
             self.text_encoder = None
 
-        latent_save_dir = self.train_config['vae_latent_save_dir']
-        frames_dir = self.dataset_config['args']['frames_dir']
+        dataset_dir = self.dataset_config['args']['dataset_dir']
+        latent_save_path = os.path.join(dataset_dir, 'vae_latents.npz')
 
         # latents are not cached; cache them 
-        if not glob.glob(os.path.join(latent_save_dir, '*.pkl')):
-            print(f"No cached latents found in {latent_save_dir}. Caching now...")
-            cache_latents(self.vae, frames_dir, latent_save_dir, vae_scale=self.train_config['vae_scale'], device=self.device)
-
-    
+        if not os.path.isfile(latent_save_path):
+            print(f"No cached latents found in {dataset_dir}. Caching now...")
+            cache_latents(self.vae, dataset_dir, vae_scale=self.train_config['vae_scale'], device=self.device)
+            
     def load_config(self, config_path: Path) -> dict:
         with open(config_path, 'r') as f:
             return yaml.safe_load(f)
@@ -215,7 +218,7 @@ class DitTrainer:
                     with torch.autocast(device_type=self.device.type, dtype=torch.bfloat16):
                         if self.use_cond:
                             # extract text embds without dropout
-                            context, mask = self.text_encoder(captions, apply_dropout=True)
+                            context, mask = self.text_encoder(captions)
                             predicted_noise = self.model(x_t, t, y=context, mask=mask)
                         else:
                             predicted_noise = self.model(x_t, t)
@@ -238,7 +241,10 @@ class DitTrainer:
             # sample and save images
             if (epoch + 1) % sample_save_interval == 0:
                 save_path = os.path.join(sample_save_dir, f'epoch_{epoch+1}.png')
-                captions = ['Ash and Misty standing outside a building, cel-shaded anime style, daytime, medium shot, signs indicating directions.', 'A Pokémon Center in a vibrant green field, daytime, close-up, peaceful atmosphere']
+                captions = ["Small orange lizard-like creature with flames on its tail, battling against a human trainer in a grassy field, daytime setting, dynamic action shot, energy-filled atmosphere.",
+                            "Red-haired character walking through dense forest, overcast day, pixelated art style, serene atmosphere, lush greenery surrounding the path",
+                            "A red-roofed healing center in a vibrant green field, daytime, close-up, peaceful atmosphere with gentle sunlight.", 
+                            "Pink-haired character standing beside a vibrant blue water body, soft daylight, serene atmosphere."]
                 out = sample_images(self, vae_scale=self.train_config['vae_scale'], input_prompt=captions, 
                                     num_samples=num_samples, cfg_guidance_scale=cfg_guidance_scale)
                 out.save(save_path)

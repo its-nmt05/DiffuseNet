@@ -1,11 +1,10 @@
 dataset:
   name: 'video'
   args:
-    video_path: /home/users/ntu/ccdsnirm/projects/pokemon.mp4
-    frames_dir: /home/users/ntu/ccdsnirm/projects/DiffuseNet/dataset/frames_256
+    video_path: /home/users/ntu/ccdsnirm/scratch/pokemon2.mp4
+    dataset_dir: /home/users/ntu/ccdsnirm/projects/DiffuseNet/dataset/pokemon2 
     hf_cache_dir: /home/users/ntu/ccdsnirm/scratch
-    vae_latent_save_dir: /home/users/ntu/ccdsnirm/projects/DiffuseNet/dataset/latents
-    interval: 3.0
+    interval: 2.0
     resolution: 256
     test_ratio: 0.2
     start: 60
@@ -21,7 +20,7 @@ vae:
   norm_type: "bn"
   norm_groups: 32
   activation: "elu"
-  vae_ckpt: /home/users/ntu/ccdsnirm/projects/DiffuseNet/vae/ckpts/pokemon/vae_epoch_300.pth
+  vae_ckpt: /home/users/ntu/ccdsnirm/scratch/DiffuseNet/vae/ckpts/2.0/vae_epoch_300.pth
 
 
 scheduler:
@@ -34,8 +33,8 @@ dit:
   latent_size: 8
   latent_ch: 64
   patch_size: 1
-  embed_dim: 1024
-  time_emb_dim: 1024
+  embed_dim: 1280
+  time_emb_dim: 1280
   num_layers: 32
   num_heads: 32
   mlp_ratio: 4
@@ -47,15 +46,15 @@ dit:
 
 training:
   seed: 42
-  batch_size: 60
+  batch_size: 76
   epochs: 1000
   lr: 0.0001
   weight_decay: 0.00001
-  num_samples: 2
+  num_samples: 4
   ckpt_save_interval: 200
-  sample_save_interval: 1
-  vae_scale: 0.374
-  cfg_guidance_scale: 2
+  sample_save_interval: 5
+  vae_scale: 0.4707
+  cfg_guidance_scale: 5
   vae_latent_save_dir: /home/users/ntu/ccdsnirm/projects/DiffuseNet/dataset/latents
   ckpt_save_dir: /home/users/ntu/ccdsnirm/scratch/DiT/ckpts/cfg-test-pokemon
   sample_save_dir: /home/users/ntu/ccdsnirm/scratch/DiT/samples/cfg-test-pokemon

@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
 from DiT.utils import modulate, get_pos_embedding, get_time_embedding
-from transformers import DistilBertModel, DistilBertTokenizer, CLIPTokenizer, CLIPTextModel
+from transformers import DistilBertModel, DistilBertTokenizer, CLIPTokenizer, CLIPModel
+from transformers import AutoTokenizer, AutoModel
 
 
 class PatchEmbed(nn.Module):
@@ -52,15 +53,15 @@ class TextEmbed():
         self.max_length = max_length
         self.device = device
 
-        assert text_embed_model in ('bert', 'clip'), "Text model can only be one of clip or bert"
+        assert text_embed_model in ('bert', 'clip'), "Text model can only be one of bert, clip"
 
         if text_embed_model == 'bert':
             self.tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
             self.text_embed_model = DistilBertModel.from_pretrained('distilbert-base-uncased').to(self.device)
         else: 
-            self.tokenizer = CLIPTokenizer.from_pretrained('openai/clip-vit-base-patch16')
-            self.text_embed_model = CLIPTextModel.from_pretrained('openai/clip-vit-base-patch16').to(self.device)
-
+            self.tokenizer = AutoTokenizer.from_pretrained('openai/clip-vit-base-patch16')
+            self.text_embed_model = CLIPModel.from_pretrained('openai/clip-vit-base-patch16').text_model.to(self.device)
+      
         self.text_embed_model.eval()
 
     def encode(self, text):
@@ -206,7 +207,7 @@ class DiTBlock(nn.Module):
         x_attn, _ = self.self_attn(x_attn, x_attn, x_attn) 
         x = x + x_attn * scale_res_attn.unsqueeze(1)
 
-        if self.cross_attn: # add cross-attn residual
+        if y is not None: # add cross-attn residual
             x = x + self.cross_attn(self.norm2(x), y, y, key_padding_mask=mask)[0]
 
         x_ffwd = modulate(self.norm3(x), scale_ffwd, shift_ffwd) # LN(x)*(1 + scale(t)) + shift(t)

@@ -32,7 +32,8 @@ class Discriminator(nn.Module):
                           stride=strides[i],
                           padding=paddings[i],
                           bias=False if i !=0 else True),
-                get_norm('bn', layers_dim[i + 1]) if i != len(layers_dim) - 2 and i != 0 else nn.Identity(),
+                get_norm('gn', norm_channels=layers_dim[i + 1], num_groups=32)
+                if i != len(layers_dim) - 2 and i != 0 else nn.Identity(),
                 activation if i != len(layers_dim) - 2 else nn.Identity()
             )
             for i in range(len(layers_dim) - 1)

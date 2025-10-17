@@ -1,6 +1,4 @@
-dataset*/*.mp4
-dataset*/frames_*/
-dataset*/latents/
+dataset/**/*.npz
 DiT/ckpts/
 DiT/samples/
 vae/ckpts/

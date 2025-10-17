@@ -1,6 +1,7 @@
 import os
 import glob
 import random
+import numpy as np
 import pickle
 
 from tqdm import tqdm
@@ -39,66 +40,58 @@ def get_activation(activation_type='relu', **kwargs):
         raise ValueError(f"Activation type '{activation_type}' not in list of supported activations: ['silu', 'gelu', 'elu', 'leakyrelu']")
 
 
-# extract frames from video with specified parameters
-def extract_frames(input_video, output_dir, interval, resolution=None, start=0, end=None):
+# extract frames from video to npz file
+def extract_frames(input_video, output_path, interval, resolution=None, start=0, end=None):
     cap = cv2.VideoCapture(input_video)
     if not cap.isOpened():
         raise IOError(f"Cannot open video file {input_video}")
 
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    if fps <= 0:
-        fps = 30.0
-
     if end and end < start:
         raise ValueError("End time must be greater than start time")
 
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     interval_frames = int(round(interval * fps))
     start_frame = int(round(start * fps))
-    end_frame = int(round(end * fps)) if end is not None else None
+    end_frame = int(round(end * fps)) if end is not None else total_frames
     
+    frames = []
+    cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)   # set to start frame
     frame_idx = 0
-    saved_idx = 0
-    os.makedirs(output_dir, exist_ok=True)
-
-    while True:
-        ret, frame = cap.read()
+    
+    while frame_idx < end_frame:
+        ret = cap.grab()
         if not ret:
-            break
-
-        # skip until start_frame
-        if frame_idx < start_frame:
             frame_idx += 1
             continue
 
-        # stop after end_frame
-        if end_frame is not None and frame_idx > end_frame:
-            break
-
-        # save frames at the given interval
+        # read frame at required intervals
         if (frame_idx - start_frame) % interval_frames == 0:
+            ret, frame = cap.retrieve()
+            if not ret:
+                frame_idx += 1
+                continue
+                
             if resolution:
-                frame = cv2.resize(frame, (resolution, resolution),
-                                   interpolation=cv2.INTER_AREA)
-            filename = f"frame_{saved_idx:05d}.jpg"
-            path = os.path.join(output_dir, filename)
-            cv2.imwrite(path, frame)
-            saved_idx += 1
+                frame = cv2.resize(frame, (resolution, resolution), interpolation=cv2.INTER_AREA)
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frames.append(frame)
 
         frame_idx += 1
 
     cap.release()
-    print(f"Saved {saved_idx} frames to {output_dir}")
+    np.savez_compressed(output_path, frames=np.stack(frames))
+    print(f"Saved {len(frames)} frames to {output_path}")
 
 
 # assign frames to train and test splits
-def assign_frames(frames_dir, test_ratio=0.2, seed=None, train_out="train_indices.txt", test_out="test_indices.txt"):
-    all_frames = sorted(
-        f for f in os.listdir(frames_dir)
-        if os.path.isfile(os.path.join(frames_dir, f))
-    )
-    total = len(all_frames)
+def assign_frames(npz_file, test_ratio=0.2, seed=None, train_out="train_indices.txt", test_out="test_indices.txt"):
+    data = np.load(npz_file)
+    frames = data['frames']
+    total = len(frames)
+
     if total == 0:
-        print("No frames found in", frames_dir)
+        print("No frames found in", npz_file)
         return
 
     # optionally seed 
@@ -111,13 +104,11 @@ def assign_frames(frames_dir, test_ratio=0.2, seed=None, train_out="train_indice
     test_indices = sorted(indices[:test_count])
     train_indices = sorted(indices[test_count:])
 
-    with open(train_out, "w") as f:
-        for idx in train_indices:
-            f.write(f"{all_frames[idx]}\n")
+    with open(train_out, 'w') as f:
+        f.write(str(train_indices))
 
-    with open(test_out, "w") as f:
-        for idx in test_indices:
-            f.write(f"{all_frames[idx]}\n")
+    with open(test_out, 'w') as f:
+        f.write(str(test_indices))
 
     print(f"Total frames: {total}")
     print(f"Train: {len(train_indices)} -> {train_out}")
@@ -149,43 +140,37 @@ def sample_images(model, dataloader, device, num_samples=8):
         return img
 
 
-def cache_latents(vae, frames_dir, latent_save_dir, vae_scale, batch_size=128, device='cuda'):
-    os.makedirs(latent_save_dir, exist_ok=True)
-    latent_save_path = os.path.join(latent_save_dir, 'vae_latents.pkl')
-    latent_maps = {}
+def cache_latents(vae, dataset_dir, vae_scale, batch_size=128, device='cuda'):
+    frames_npz_file = os.path.join(dataset_dir, 'frames.npz')
+    latent_save_path = os.path.join(dataset_dir, 'vae_latents.npz')
+
+    # load all the frames from npz file
+    frames = np.load(frames_npz_file, mmap_mode='r')['frames']
+    all_latents = []
 
     transform = transforms.Compose([
         transforms.ToTensor(),
     ])
 
-    # load all img paths
-    all_frames = sorted(glob.glob(os.path.join(frames_dir, '*')))
-
     vae.eval()
     with torch.no_grad():
-        for i in tqdm(range(0, len(all_frames), batch_size), desc='Caching latents: '):
-            batched_paths = all_frames[i:i+batch_size]
-            batched_frames = [transform(Image.open(p).convert('RGB')) for p in batched_paths]
+        for i in tqdm(range(0, len(frames), batch_size), desc='Caching latents: '):
+            batched_frames = frames[i:i+batch_size]
+            batched_frames = [transform(Image.fromarray(frame)) for frame in batched_frames]
             batched_frames = torch.stack(batched_frames).to(device)
 
             latents, _, _ = vae.encode(batched_frames)
             latents = latents / vae_scale
+            all_latents.append(latents.cpu())
 
-            for idx, path in enumerate(batched_paths):
-                fname = os.path.basename(path) 
-                latent_maps[fname] = [latents[idx].cpu()]
-
-        # save all the latents
-        with open(latent_save_path, 'wb') as f:
-            pickle.dump(latent_maps, f)
-
-        print(f"Cached latents for {len(all_frames)} images to {latent_save_path}")
+        all_latents = np.concatenate(all_latents, axis=0)
+        np.savez_compressed(latent_save_path, latents=all_latents)
+        print(f"Cached latents for {len(all_latents)} images to {latent_save_path}")
 
 
-def load_cached_latents(latent_save_dir):
-    latent_maps = {}
-    for fname in glob.glob(os.path.join(latent_save_dir, '*.pkl')):
-        s = pickle.load(open(fname, 'rb'))
-        for k, v in s.items():
-            latent_maps[k] = v[0]   # unwrap from the list
-        return latent_maps  
+def load_cached_latents(latent_save_path):
+    data = np.load(latent_save_path, mmap_mode='r')
+    latents = data['latents']
+    # construct latents dict
+    latents_maps = {idx: latent for idx, latent in enumerate(latents)}
+    return latents_maps

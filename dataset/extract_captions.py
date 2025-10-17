@@ -1,5 +1,6 @@
 import torch
 from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
+import numpy as np
 import glob
 import os
 from tqdm import tqdm
@@ -20,16 +21,16 @@ def get_model_and_processor(hf_cache_dir):
 
 
 # running inference for batched images 
-def inference_batch(image_paths, prompt, model, processor, device='cuda'):
+def inference_batch(frames_batch, prompt, model, processor, device='cuda'):
     messages_batch = [
         [{
             "role": "user",
             "content": [
-                {"type": "image", "image": image_path},
+                {"type": "image", "image": frame},
                 {"type": "text", "text": prompt},
             ],
         }]
-        for image_path in image_paths
+        for frame in frames_batch
     ]
 
     # Prepare the input for the processor
@@ -56,27 +57,28 @@ def inference_batch(image_paths, prompt, model, processor, device='cuda'):
 
 
 # process the entire dataset
-def generate_captions(hf_cache_dir, frames_dir, output_file, prompt, batch_size, device='cuda'):
-    image_paths = sorted(glob.glob(os.path.join(frames_dir, "*.jpg")))
+def generate_captions(hf_cache_dir, npz_file, output_file, prompt, batch_size, device='cuda'):
+    data = np.load(npz_file, mmap_mode='r')
+    frames = data["frames"]
     model, processor = get_model_and_processor(hf_cache_dir)
 
     captions = []   # placeholder for captions 
     
-    print(f"Generating captions for {len(image_paths)} images in \"{frames_dir}\"")
+    print(f"Generating captions for {len(frames)} frames in \"{npz_file}\"")
 
     # process batches
-    for i in tqdm(range(0, len(image_paths), batch_size), desc="Processing batches"):
-        batch_paths = image_paths[i:i + batch_size]
-        # prompts = [prompt] * len(batch_paths)
-        batch_captions = inference_batch(batch_paths, prompt, model, processor,  device)
+    for i in tqdm(range(0, len(frames), batch_size), desc="Processing batches"):
+        batch_frames = frames[i:i + batch_size]
+        batch_captions = inference_batch(batch_frames, prompt, model, processor,  device)
 
-        for path, cap in zip(batch_paths, batch_captions):
-            captions.append([os.path.basename(path), cap])
+        for idx, cap in enumerate(batch_captions):
+            frame_idx = i + idx
+            captions.append([frame_idx, cap])
 
     # write paths and captions as CSV rows
     with open(output_file, "w", newline='', encoding='utf-8') as f_out:
         writer = csv.writer(f_out)
-        writer.writerow(["image", "caption"])  # write header
+        writer.writerow(["idx", "caption"])  # write header
         writer.writerows(captions)   
 
     print(f"Output captions saved to {output_file}")
@@ -84,41 +86,38 @@ def generate_captions(hf_cache_dir, frames_dir, output_file, prompt, batch_size,
 
 if __name__ == '__main__':
     SYSTEM_PROMPT = """
-    You generate text prompts for a Pokemon gameplay image dataset to train a diffusion model (DiT).  
+    You generate text prompts for a Pokémon gameplay image dataset to train a diffusion model (DiT).
 
     Rules:
-    1. Describe the scene, subject, and context clearly.
-    2. Include action, pose, perspective, and interaction if applicable.
-    3. Use template:
-    [Subject/Character], [Action/Interaction], [Setting/Environment], [Lighting/Time]
-    4. Avoid vague terms like “nice” or “good-looking”
-    5. Each prompt must be 15-30 words long
+    1. Avoid Pokémon-specific terms, names, or move names (no "Pikachu", "Thunderbolt", "Poké Ball", etc.).
+    2. Use generic but vivid descriptions understandable by CLIP (e.g., "small yellow creature emitting electricity").
+    3. Clearly describe subject, action, environment, and mood.
+    4. Use the template:
+    [Subject/Character], [Action/Interaction], [Setting/Environment], [Lighting/Time/Style]
+    5. Each prompt must be 15-30 words long.
+    6. Focus on general concepts like “creature,” “battlefield,” “forest,” “energy blast,” “trainer,” “arena,” etc.
+    7. Avoid vague adjectives like “nice” or “cool.”
 
     Examples:
-    Pikachu using thunderbolt against Bulbasaur in a rocky arena, retro pixel-art style, night setting, side view, glowing sparks filling the scene.  
-    Ash holding a Poké Ball in a grassy battlefield, cel-shaded anime style, bright sunlight, medium shot, crowd cheering with excitement.
+    Small yellow creature releasing electric sparks toward a green reptilian monster, rocky arena, cinematic style, night lighting, sparks illuminating the scene.  
+    Young trainer throwing a red-and-white sphere toward a glowing beast, grassy field, anime-inspired art style, bright daylight, energetic action shot.
     """
 
     parser = argparse.ArgumentParser(description="Generate image captions using Qwen2.5-VL")
-    parser.add_argument("--hf_cache_dir", type=str, required=True,
-                        help="Path to Hugging Face cache directory")
-    parser.add_argument("--frames_dir", type=str, required=True,
-                        help="Path to dataset directory containing frames")
-    parser.add_argument("--prompt", type=str, default=SYSTEM_PROMPT,
-                        help="Prompt instruction for caption generation")
-    parser.add_argument("--batch_size", type=int, default=32,
-                        help="Batch size for inference")
-    parser.add_argument("--device", type=str, default="cuda",
-                        help="Device for inference (e.g., 'cuda' or 'cpu')")
+    parser.add_argument("--hf_cache_dir", type=str, required=True)
+    parser.add_argument("--npz_file", type=str, required=True)
+    parser.add_argument("--prompt", type=str, default=SYSTEM_PROMPT)
+    parser.add_argument("--batch_size", type=int, default=32)
+    parser.add_argument("--device", type=str, default="cuda")
 
     args = parser.parse_args()
 
     # create captions.csv inside dataset dir
-    output_file = os.path.join(os.path.dirname(args.frames_dir), "captions.csv")
+    output_file = os.path.join(os.path.dirname(args.npz_file), "captions.csv")
 
     generate_captions(
         hf_cache_dir=args.hf_cache_dir,
-        frames_dir=args.frames_dir,
+        npz_file=args.npz_file,
         output_file=output_file,
         prompt=args.prompt,
         batch_size=args.batch_size,
