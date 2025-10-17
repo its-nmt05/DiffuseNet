@@ -33,10 +33,10 @@ dit:
   latent_size: 8
   latent_ch: 64
   patch_size: 1
-  embed_dim: 1280
-  time_emb_dim: 1280
-  num_layers: 32
-  num_heads: 32
+  embed_dim: 1920
+  time_emb_dim: 1920
+  num_layers: 24
+  num_heads: 24
   mlp_ratio: 4
   cond_config:
     text_embed_model: 'clip'
@@ -46,16 +46,15 @@ dit:
 
 training:
   seed: 42
-  batch_size: 76
+  batch_size: 72
   epochs: 1000
   lr: 0.0001
   weight_decay: 0.00001
   num_samples: 4
-  ckpt_save_interval: 200
-  sample_save_interval: 5
-  vae_scale: 0.4707
-  cfg_guidance_scale: 5
-  vae_latent_save_dir: /home/users/ntu/ccdsnirm/projects/DiffuseNet/dataset/latents
+  ckpt_save_interval: 100
+  sample_save_interval: 1
+  vae_scale: 0.437
+  cfg_guidance_scale: 7
   ckpt_save_dir: /home/users/ntu/ccdsnirm/scratch/DiT/ckpts/cfg-test-pokemon
   sample_save_dir: /home/users/ntu/ccdsnirm/scratch/DiT/samples/cfg-test-pokemon
 

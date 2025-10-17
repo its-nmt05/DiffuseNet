@@ -140,7 +140,7 @@ def sample_images(model, dataloader, device, num_samples=8):
         return img
 
 
-def cache_latents(vae, dataset_dir, vae_scale, batch_size=128, device='cuda'):
+def cache_latents(vae, dataset_dir, batch_size=128, device='cuda'):
     frames_npz_file = os.path.join(dataset_dir, 'frames.npz')
     latent_save_path = os.path.join(dataset_dir, 'vae_latents.npz')
 
@@ -160,7 +160,6 @@ def cache_latents(vae, dataset_dir, vae_scale, batch_size=128, device='cuda'):
             batched_frames = torch.stack(batched_frames).to(device)
 
             latents, _, _ = vae.encode(batched_frames)
-            latents = latents / vae_scale
             all_latents.append(latents.cpu())
 
         all_latents = np.concatenate(all_latents, axis=0)

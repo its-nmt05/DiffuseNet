@@ -107,7 +107,7 @@ class DitTrainer:
         # latents are not cached; cache them 
         if not os.path.isfile(latent_save_path):
             print(f"No cached latents found in {dataset_dir}. Caching now...")
-            cache_latents(self.vae, dataset_dir, vae_scale=self.train_config['vae_scale'], device=self.device)
+            cache_latents(self.vae, dataset_dir, device=self.device)
             
     def load_config(self, config_path: Path) -> dict:
         with open(config_path, 'r') as f:
@@ -169,7 +169,8 @@ class DitTrainer:
                 else:
                     with torch.no_grad():
                         latents, _, _ = self.vae.encode(im)
-                        latents = latents / self.train_config['vae_scale']
+                    
+                latents = latents / self.train_config['vae_scale']
 
                 t = self.scheduler.sample_timesteps(latents.shape[0]).to(self.device)
                 x_t, noise = self.scheduler.add_noise(latents, t)
@@ -210,7 +211,8 @@ class DitTrainer:
                     else:
                         with torch.no_grad():
                             latents, _, _ = self.vae.encode(im)
-                            latents = latents / self.train_config['vae_scale']
+                            
+                    latents = latents / self.train_config['vae_scale']
 
                     t = self.scheduler.sample_timesteps(latents.shape[0]).to(self.device)
                     x_t, noise = self.scheduler.add_noise(latents, t)

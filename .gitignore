@@ -1,6 +1,7 @@
 dataset/**/*.npz
 DiT/ckpts/
 DiT/samples/
+DiT/inference*
 vae/ckpts/
 vae/reconstructions/
 wandb/
